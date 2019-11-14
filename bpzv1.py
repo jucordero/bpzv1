@@ -20,7 +20,7 @@ import inspect
 import os
 
 bpz_path = '/' + '/'.join([i for i in os.path.realpath(__file__).split('/')[0:-1]]) + '/'
-sys.path.append(bpz_path + '/validation/')
+sys.path.append(bpz_path + './validation/')
 
 import bh_photo_z_validation as pval
 import random as rdm
@@ -567,12 +567,22 @@ def main(args):
     for fil in files:
 
         #get corresponding magnitudes
-        orig_table = pyfits.open(fil)[1].data
-        orig_cols = orig_table.columns
+	if key_not_none(config, 'max_ngals'):
+		max_ngals = config['max_ngals']
+        	orig_table = pyfits.open(fil)[1].data[0:max_ngals]
+		print('Limiting to first {0} entries in the catalogue'.format(max_ngals))
+	else:
+		orig_table = pyfits.open(fil)[1].data
+        
+	orig_cols = orig_table.columns
         n_gals = len(orig_table[orig_cols.names[0]])
         ID = np.array(orig_table[config['ID']])
-        prior_mag = np.array(np.round(orig_table[config['PRIOR_MAGNITUDE']], 1) * 100).astype(np.int)
-
+	if config['INPUT_MAGS']:
+        	prior_mag = np.array(np.round(orig_table[config['PRIOR_MAGNITUDE']], 1) * 100).astype(np.int)
+	else:
+		prior_flux = np.array(orig_table[config['PRIOR_MAGNITUDE']])
+		prior_mag = 30 - 2.5*np.log10(prior_flux)
+		prior_mag = np.array(np.round(prior_mag, 1) * 100).astype(np.int)
         ADDITIONAL_OUTPUT_COLUMNS = []
 
         if key_not_none(config, 'ADDITIONAL_OUTPUT_COLUMNS'):
@@ -602,16 +612,21 @@ def main(args):
             #we are dealing with FLUXEs
             for i in np.arange(len(MAG_OR_FLUX)):
                 ind_process *= (ef_obs[:, i] > 0)
+		ind_process *= (f_obs[:, i]/ef_obs[:, i] > config['signal_to_noise_limit'])
+
+
+	
 
         # print(np.sum(ind_process))
 
         #add photoemtric offset error
         ef_obs = np.sqrt(ef_obs * ef_obs + np.power(zp_frac * f_obs, 2))
-
-        f_shift = np.random.normal(scale = ef_obs)
-        frac_shift = np.absolute(f_shift) / f_obs
-        np.savetxt('frac_shifts.txt', frac_shift)
-        f_obs += f_shift
+	if config['RANDOMIZE_FLUX']:
+        	f_shift = np.random.normal(scale = ef_obs)
+        	#frac_shift = np.absolute(f_shift) / f_obs
+        	#np.savetxt('frac_shifts.txt', frac_shift)
+        	f_obs += f_shift
+		print('Randomizing fluxes')
 
         print(np.min(f_obs), np.max(f_obs))
 
@@ -716,6 +731,7 @@ def main(args):
         if len(ADDITIONAL_OUTPUT_COLUMNS) > 0:
             add_cols = pyfits.ColDefs([pyfits.Column(name=col_name, array=orig_table[col_name], format='D') for col_name in ADDITIONAL_OUTPUT_COLUMNS])
             hdu = pyfits.BinTableHDU.from_columns(template_cols + id_cols + add_cols + new_cols)
+	    del add_cols
         else:
             hdu = pyfits.BinTableHDU.from_columns(template_cols + id_cols + new_cols)
 
@@ -724,7 +740,7 @@ def main(args):
         hdu.writeto(fname, overwrite=True)
 
         #free memory
-        del new_cols, add_cols
+        del new_cols
 
         #save pdf files
         if output_pdfs:
