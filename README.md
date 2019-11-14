@@ -11,7 +11,7 @@ Authors: Ben Hoyle
 
 2) Example
 
-3) Output 
+3) Output
 
 3.1) point prediction files
 3.2) pdf prediction files
@@ -59,21 +59,22 @@ import bh_photo_z_validation as pval
 from galaxy_type_prior import GALAXYTYPE_PRIOR
 
 ================================
-2) Example usage. 
+2) Example usage.
 ================================
 Use a text editor to look at bpzConfig.yaml. There you can make all the adjustments, set directory paths that you used to make within the BPZ code.
 
 To generate an exmaple yaml file run
-%>./bpzv1.py 
+%>./bpzv1.py
 
--- this write exampleBPZConfig.yaml to disk (if it doesn't already exist) 
+-- this write exampleBPZConfig.yaml to disk (if it doesn't already exist)
 
 To run the code
 
-%>./bpzv1.py PathToConfig.yaml PathToListofFitsFiles.fits
+%>./bpzv1.py PathToConfig.yaml PathToListofFitsFiles.fits ID
 
 PathToListofFitsFiles.fits can contain a * so that all files will be processsed separately
 
+ID is an integer to differentiate different runs 
 
 where PathToConfig.yaml is a configuration file, that defines how to run the code. See bpzConfig.yaml for an example
 
@@ -84,13 +85,13 @@ where PathToConfig.yaml is a configuration file, that defines how to run the cod
 
 The code generates a output fits files, which contain 'MEAN_Z'  'Z_SIGMA' 'MEDIAN_Z': 'Z_MC': 'Z_SIGMA68': and any additional columns e.g. REDSHIFT or MAG_I or COADDED_OBJECTS_ID that you asked for within the config.yaml file.
 
-Additional outputs are: 
+Additional outputs are:
 KL_POST_PRIOR - the information gain (Kullbeck Leibler divergence) between prior and posterior
 chi2 - the minimum \Chi^2 to the closest template synthetic example
-TEMPLATE_TYPE - the maximum posterior template type, as defined as a linear combination of input templates using a floating point notation [as per standard BPZ]! 
+TEMPLATE_TYPE - the maximum posterior template type, as defined as a linear combination of input templates using a floating point notation [as per standard BPZ]!
     #each sed (in order) is a number between 1 -> Num seds.
-    #interpolatated sed are fractional quantites between, 
-        e.g. TEMPLATE_TYPE = 1.4  meaning 0.6 of sed1 and 0.4 of sed2 
+    #interpolatated sed are fractional quantites between,
+        e.g. TEMPLATE_TYPE = 1.4  meaning 0.6 of sed1 and 0.4 of sed2
         e.g. TEMPLATE_TYPE = 3.1  meaning 0.9 of sed3 and 0.1 of sed4
 
 TEMPLATE_ID - the SED ID that corresponds to the best fitting template.
@@ -114,7 +115,7 @@ Various extensions:
 4) Comparison with older BPZ
 ================================
 
-In the test/ directory there is .cat file and a .fits file of the same data. 
+In the test/ directory there is .cat file and a .fits file of the same data.
 
 The .cat file works with older version of bpz
 
@@ -125,7 +126,7 @@ cd ../bpz-1.99.3/
 then back in the ../bpzv1/test/
 %>markus_bpz_out_fits.py WL_CLASS.METACAL.rescaled.slr.cosmos.v2._96_200_sampled.fits.bpz
 
-And for comparison the newer version 
+And for comparison the newer version
 %>./bpzv1.py test/bpzConfig.yaml test/WL_CLASS.METACAL.rescaled.slr.cosmos.v2._96_200_sampled.fits
 
 --- results ---
@@ -136,7 +137,7 @@ output:
 array:
 delta_z = z_max_post - REDSHIFT
 metrics:
-('median(delta_z), mean(delta_z), std(delta_z), outFrac(delta/(1+z) > 0.15), len(delta_z)', 
+('median(delta_z), mean(delta_z), std(delta_z), outFrac(delta/(1+z) > 0.15), len(delta_z)',
 
 old-bpz
 0.0275658443 0.003453 0.5619  30.46609 4999
@@ -144,12 +145,12 @@ new-bpz
 0.027212330, -0.0069863, 0.56566, 31.1062, 4999)
 
 -- old template order
-0.02721233069248824, -0.0069863751258707587, 0.56566552010489746, 31.10622124424885, 
+0.02721233069248824, -0.0069863751258707587, 0.56566552010489746, 31.10622124424885,
 
 --new template order
  0.011479710711922331, -0.0032816341776811184, 0.56635402992871497, 29.90598119623924
 
---Standard template list: 8 interps 
+--Standard template list: 8 interps
 0.011479710711922331, -0.0032816341776811184, 0.56635402992871497, 29.90598, 4999
 
 intpolate x8 all template types with each other
@@ -166,16 +167,16 @@ intpolate x5 all template types with each other
 ================================
 
 6.1 -- first run bpzv1.py with a .yaml file with the path to the SED_DIR set (default used), and provide an output pickle file name
-e.g. 
+e.g.
 output_sed_lookup_file: BPZ_templates.p
 SED_DIR: %s../../templates/SED/
 
 -- to save trouble, bpz will stop if the output file already exists!
 
-6.2) read in resulting .fits files (or hdf5) and pickle file: 
+6.2) read in resulting .fits files (or hdf5) and pickle file:
 e.g.
 %>cd photoz-wg/redshift_codes/photoz_codes/bpzv1/test/
-In python 2.7 
+In python 2.7
 
 import cPickle as pickle
 from astropy.table import Table
