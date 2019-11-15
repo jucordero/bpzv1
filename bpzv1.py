@@ -19,17 +19,17 @@ import numpy as np
 import inspect
 import os
 
-bpz_path = '/' + '/'.join([i for i in os.path.realpath(__file__).split('/')[0:-1]]) + '/'
-sys.path.append(bpz_path + './validation/')
+bpz_path = '/'.join([i for i in os.path.realpath(__file__).split('/')[0:-1]]) + '/'
+sys.path.append(bpz_path + '/validation/')
 
 import bh_photo_z_validation as pval
 import random as rdm
 
 
 def _help():
-    print "new version BPZ"
-    print "call like"
-    print "bpzv1.py pathToConfigFile.yaml pathTofits*.fits"
+    print( "new version BPZ")
+    print( "call like")
+    print( "bpzv1.py pathToConfigFile.yaml pathTofits*.fits")
     writeExampleConfig()
     sys.exit()
 
@@ -40,7 +40,7 @@ def writeExampleConfig():
     import textwrap
 
     path = os.getcwd() + '/'
-    bpz_path = '/' + '/'.join([i for i in os.path.realpath(__file__).split('/')[0:-1]]) + '/'
+    bpz_path = '/'.join([i for i in os.path.realpath(__file__).split('/')[0:-1]]) + '/'
 
     if os.path.isfile(path + 'exampleBPZConfig.yaml') is False:
         f = open(path + 'exampleBPZConfig.yaml', 'w')
@@ -49,13 +49,15 @@ def writeExampleConfig():
 """
 #redshift bins min, max, width
 redshift_bins: [0.01, 3.5, 0.01]
+max_ngals:
+RANDOMIZE_FLUX: False
 
 #either set here, or we will determine this from the code.
 #Default: determine from code
 BPZ_BASE_DIR:
-#for SV this is %s../../templates/AB_BPZ_ORIG/
-#for Y1 this is %s../../templates/AB_BPZ_HIZ/
-AB_DIR: %s../../templates/AB_BPZ_HIZ/
+#for SV this is %s/templates/AB_BPZ_ORIG/
+#for Y1 this is %s/templates/AB_BPZ_HIZ/
+AB_DIR: %s/templates/AB_BPZ_HIZ/
 
 #--------for Y1 this is----------
 #spectra list. This *must* match the sed_type below. They must exist as expected in AB_DIR/*.AB
@@ -95,6 +97,9 @@ mag_unobs: -99
 
 #Objects not detected
 mag_undet: 99
+
+# Ignore objects with flux/flux_err < S/N
+signal_to_noise_limit:
 
 #this construct which magnitudes / or FLUXES map to which filters
 filters: {
@@ -139,10 +144,10 @@ INTERP: 8
 #if this file aleady exists, the code will stop.
 output_sed_lookup_file:
 
-SED_DIR: %s../../templates/SED/
+SED_DIR: %s/templates/SED/
 
 #should we parralise the loops?
-n_jobs: 5
+n_jobs: 4
 
 #print some information to screen
 verbose: True
@@ -275,11 +280,10 @@ def parr_loop(lst):
 
         prior = np.zeros_like(likelihood)
         pr_mg = gal_mag_type_prior.keys()
-
-        ind_mag_p = np.argmin(np.abs(prior_mag_[i] - np.array(pr_mg)))
+        ind_mag_p = np.argmin(np.abs(prior_mag_[i] - np.array(list(pr_mg))))
 
         for j in np.arange(len(f_mod[0, :, 0])):
-            prior[:, j] = gal_mag_type_prior[pr_mg[ind_mag_p]][j]
+            prior[:, j] = gal_mag_type_prior[list(pr_mg)[ind_mag_p]][j]
 
         #posterior is prior * Likelihood
         posterior = prior * likelihood
@@ -411,7 +415,7 @@ def main(args):
     ind_sed_int = np.arange(len(config['sed_list']), dtype=int)
 
     #identify the filter we will normalise to.
-    ind_norm = np.where(np.array(filters) == config['normalisation_filter'])[0][0]
+    ind_norm = np.where(np.array(list(filters)) == config['normalisation_filter'])[0][0]
 
     #get flux offsets, and errors.
     zp_offsets = np.array([config['filters'][i]['zp_offset'] for i in filters])
@@ -561,232 +565,231 @@ def main(args):
         print ("template fluxes written to: ", output_file_suffix + config['output_sed_lookup_file'])
     #fast access to prior dictionary
     gal_mag_type_prior = GALPRIOR.prepare_prior_dictionary_types(template_type_dict)
-    mags_bins = np.array(gal_mag_type_prior.keys(), dtype=float)
+    mags_bins = np.array(list(gal_mag_type_prior.keys()), dtype=float)
 
     #now load each file in turn.
     for fil in files:
 
         #get corresponding magnitudes
-	if key_not_none(config, 'max_ngals'):
-		max_ngals = config['max_ngals']
-        	orig_table = pyfits.open(fil)[1].data[0:max_ngals]
-		print('Limiting to first {0} entries in the catalogue'.format(max_ngals))
-	else:
-		orig_table = pyfits.open(fil)[1].data
-        
-	orig_cols = orig_table.columns
+        if key_not_none(config, 'max_ngals'):
+            max_ngals = config['max_ngals']
+            orig_table = pyfits.open(fil)[1].data[0:max_ngals]
+            print('Limiting to first {0} entries in the catalogue'.format(max_ngals))
+        else:
+            orig_table = pyfits.open(fil)[1].data
+
+        orig_cols = orig_table.columns
         n_gals = len(orig_table[orig_cols.names[0]])
         ID = np.array(orig_table[config['ID']])
-	if config['INPUT_MAGS']:
-        	prior_mag = np.array(np.round(orig_table[config['PRIOR_MAGNITUDE']], 1) * 100).astype(np.int)
-	else:
-		prior_flux = np.array(orig_table[config['PRIOR_MAGNITUDE']])
-		prior_mag = 30 - 2.5*np.log10(prior_flux)
-		prior_mag = np.array(np.round(prior_mag, 1) * 100).astype(np.int)
-        ADDITIONAL_OUTPUT_COLUMNS = []
-
-        if key_not_none(config, 'ADDITIONAL_OUTPUT_COLUMNS'):
-
-            #warn if all other requested columns are not in table
-            for i, cl in enumerate(config['ADDITIONAL_OUTPUT_COLUMNS']):
-                if cl not in orig_cols.names:
-                    print ('Warning {:} not found in {:}. Continuing'.format(cl, fil))
-                else:
-                    ADDITIONAL_OUTPUT_COLUMNS.append(cl)
-
-        f_obs = np.array([np.array(orig_table[i]) for i in MAG_OR_FLUX]).T
-        ef_obs = np.array([np.array(orig_table[i]) for i in MAG_OR_FLUXERR]).T
-
-        ind_process = np.ones(len(f_obs), dtype=bool)
-        # print(np.sum(ind_process))
         if config['INPUT_MAGS']:
-            for i in range(len(MAG_OR_FLUX)):
-                ind_process *= (f_obs[:, i] != config['mag_unobs'])
-                ind_process *= (f_obs[:, i] != config['mag_undet'])
-
-            #we are dealing with MAGS
-
-            f_obs = np.power(10, -0.4 *(f_obs - 30))
-            ef_obs = ef_obs*f_obs/1.086
+                prior_mag = np.array(np.round(orig_table[config['PRIOR_MAGNITUDE']], 1) * 100).astype(np.int)
         else:
-            #we are dealing with FLUXEs
-            for i in np.arange(len(MAG_OR_FLUX)):
-                ind_process *= (ef_obs[:, i] > 0)
-		ind_process *= (f_obs[:, i]/ef_obs[:, i] > config['signal_to_noise_limit'])
+            prior_flux = np.array(orig_table[config['PRIOR_MAGNITUDE']])
+            prior_mag = 30 - 2.5*np.log10(prior_flux)
+            prior_mag = np.array(np.round(prior_mag, 1) * 100).astype(np.int)
+            ADDITIONAL_OUTPUT_COLUMNS = []
 
+            if key_not_none(config, 'ADDITIONAL_OUTPUT_COLUMNS'):
 
-	
+                #warn if all other requested columns are not in table
+                for i, cl in enumerate(config['ADDITIONAL_OUTPUT_COLUMNS']):
+                    if cl not in orig_cols.names:
+                        print ('Warning {:} not found in {:}. Continuing'.format(cl, fil))
+                    else:
+                        ADDITIONAL_OUTPUT_COLUMNS.append(cl)
 
-        # print(np.sum(ind_process))
+            f_obs = np.array([np.array(orig_table[i]) for i in MAG_OR_FLUX]).T
+            ef_obs = np.array([np.array(orig_table[i]) for i in MAG_OR_FLUXERR]).T
 
-        #add photoemtric offset error
-        ef_obs = np.sqrt(ef_obs * ef_obs + np.power(zp_frac * f_obs, 2))
-	if config['RANDOMIZE_FLUX']:
-        	f_shift = np.random.normal(scale = ef_obs)
-        	#frac_shift = np.absolute(f_shift) / f_obs
-        	#np.savetxt('frac_shifts.txt', frac_shift)
-        	f_obs += f_shift
-		print('Randomizing fluxes')
+            ind_process = np.ones(len(f_obs), dtype=bool)
+            # print(np.sum(ind_process))
+            if config['INPUT_MAGS']:
+                for i in range(len(MAG_OR_FLUX)):
+                    ind_process *= (f_obs[:, i] != config['mag_unobs'])
+                    ind_process *= (f_obs[:, i] != config['mag_undet'])
 
-        print(np.min(f_obs), np.max(f_obs))
+                #we are dealing with MAGS
 
-        #apply photo-z offsets
-        f_obs = f_obs * zp_offsets
-        ef_obs = ef_obs * zp_offsets
+                f_obs = np.power(10, -0.4 *(f_obs - 30))
+                ef_obs = ef_obs*f_obs/1.086
+            else:
+                #we are dealing with FLUXEs
+                for i in np.arange(len(MAG_OR_FLUX)):
+                    ind_process *= (ef_obs[:, i] > 0)
 
-        #get normalised flux column
-        norm_col = config['filters'][config['normalisation_filter']]['MAG_OR_FLUX']
-        ind_norm_flux = np.where([i == norm_col for i in MAG_OR_FLUX])[0][0]
+            if key_not_none(config, 'signal_to_noise_limit'):
+                ind_process *= (f_obs[:, i]/ef_obs[:, i] > config['signal_to_noise_limit'])
 
-        if ind_norm != ind_norm_flux:
-            print ("problem the template and real fluxes are out of order!: != ", ind_norm, ind_norm_flux)
-            sys.exit()
+            # print(np.sum(ind_process))
 
-        if key_not_none(config, 'output_pdfs'):
-            if config['output_pdfs']:
-                pdf_file = fil.split('.fits')[0] + output_file_suffix + '.pdf.h5'
-                df = pd.DataFrame()
-                df.to_hdf(pdf_file, 'pdf_predictions', append=True)
-                df.to_hdf(pdf_file, 'point_predictions', append=True)
-                df.to_hdf(pdf_file, 'info', append=True)
-                df2 = pd.DataFrame({'z_bin_centers': z_bins})
-                df2.to_hdf(pdf_file, key='info', append=True)
-                store = pd.HDFStore(pdf_file)
+            #add photoemtric offset error
+            ef_obs = np.sqrt(ef_obs * ef_obs + np.power(zp_frac * f_obs, 2))
+            if config['RANDOMIZE_FLUX']:
+                f_shift = np.random.normal(scale = ef_obs)
+                #frac_shift = np.absolute(f_shift) / f_obs
+                #np.savetxt('frac_shifts.txt', frac_shift)
+                f_obs += f_shift
+                print('Randomizing fluxes')
 
-        nf = len(filters)
+            print(np.min(f_obs), np.max(f_obs))
 
-        #prepare for trivial parralisation using job_lib see  Parrallelise
-        #above for an example. Split into 50k chunks
-        ind = np.arange(n_gals)[ind_process]
+            #apply photo-z offsets
+            f_obs = f_obs * zp_offsets
+            ef_obs = ef_obs * zp_offsets
 
-        parr_lsts = []
-        if key_not_none(config, 'n_jobs'):
+            #get normalised flux column
+            norm_col = config['filters'][config['normalisation_filter']]['MAG_OR_FLUX']
+            ind_norm_flux = np.where([i == norm_col for i in MAG_OR_FLUX])[0][0]
+
+            if ind_norm != ind_norm_flux:
+                print ("problem the template and real fluxes are out of order!: != ", ind_norm, ind_norm_flux)
+                sys.exit()
+
+            if key_not_none(config, 'output_pdfs'):
+                if config['output_pdfs']:
+                    pdf_file = fil.split('.fits')[0] + output_file_suffix + '.pdf.h5'
+                    df = pd.DataFrame()
+                    df.to_hdf(pdf_file, 'pdf_predictions', append=True)
+                    df.to_hdf(pdf_file, 'point_predictions', append=True)
+                    df.to_hdf(pdf_file, 'info', append=True)
+                    df2 = pd.DataFrame({'z_bin_centers': z_bins})
+                    df2.to_hdf(pdf_file, key='info', append=True)
+                    store = pd.HDFStore(pdf_file)
+
+            nf = len(filters)
+
+            #prepare for trivial parralisation using job_lib see  Parrallelise
+            #above for an example. Split into 50k chunks
+            ind = np.arange(n_gals)[ind_process]
+
             parr_lsts = []
-            ind_ = np.array_split(ind, int(len(ind) / 50000) + 2)
-            for ind1 in ind_:
-                parr_lsts.append([ind1, f_obs[ind1], ef_obs[ind1], prior_mag[ind1], f_mod, gal_mag_type_prior, z_bins, config])
+            if key_not_none(config, 'n_jobs'):
+                parr_lsts = []
+                ind_ = np.array_split(ind, int(len(ind) / 50000) + 2)
+                for ind1 in ind_:
+                    parr_lsts.append([ind1, f_obs[ind1], ef_obs[ind1], prior_mag[ind1], f_mod, gal_mag_type_prior, z_bins, config])
 
-            res1 = Parrallelise(n_jobs=config['n_jobs'], method=parr_loop, loop=parr_lsts).run()
-        else:
-            #we do not want to parralise. let's send all the data required to the same function in one go.
-            parr_lsts = [ind, f_obs, ef_obs, prior_mag, f_mod, gal_mag_type_prior, z_bins, config]
+                res1 = Parrallelise(n_jobs=config['n_jobs'], method=parr_loop, loop=parr_lsts).run()
+            else:
+                #we do not want to parralise. let's send all the data required to the same function in one go.
+                parr_lsts = [ind, f_obs, ef_obs, prior_mag, f_mod, gal_mag_type_prior, z_bins, config]
 
-            #this must be kept as a list, so that we can loop over it, as it it was parrellised
-            res1 = [parr_loop(parr_lsts)]
+                #this must be kept as a list, so that we can loop over it, as it it was parrellised
+                res1 = [parr_loop(parr_lsts)]
 
-        #free space
-        del parr_lsts
+            #free space
+            del parr_lsts
 
 
-        #results arrays for point predictions
-        mode = np.zeros(n_gals) + np.nan
-        z_minchi2 = np.zeros(n_gals) + np.nan
-        z_max_marg_like = np.zeros(n_gals) + np.nan
-        mean = np.zeros(n_gals) + np.nan
-        sigma = np.zeros(n_gals) + np.nan
-        median = np.zeros(n_gals) + np.nan
-        mc = np.zeros(n_gals) + np.nan
-        sig68 = np.zeros(n_gals) + np.nan
-        KL_post_prior = np.zeros(n_gals) + np.nan
-        min_chi2 = np.zeros(n_gals) + np.nan
-        template_type = np.zeros(n_gals, dtype=float) + np.nan
-        template_int = np.zeros(n_gals, dtype=int) - 999
+            #results arrays for point predictions
+            mode = np.zeros(n_gals) + np.nan
+            z_minchi2 = np.zeros(n_gals) + np.nan
+            z_max_marg_like = np.zeros(n_gals) + np.nan
+            mean = np.zeros(n_gals) + np.nan
+            sigma = np.zeros(n_gals) + np.nan
+            median = np.zeros(n_gals) + np.nan
+            mc = np.zeros(n_gals) + np.nan
+            sig68 = np.zeros(n_gals) + np.nan
+            KL_post_prior = np.zeros(n_gals) + np.nan
+            min_chi2 = np.zeros(n_gals) + np.nan
+            template_type = np.zeros(n_gals, dtype=float) + np.nan
+            template_int = np.zeros(n_gals, dtype=int) - 999
 
-        if output_pdfs:
-            pdfs_ = np.zeros((n_gals, len(z_bins))) + np.nan
-
-        #let's combine all the results from the parrallel (or not) jobs
-        for res in res1:
-            ind_ = res['ind']
-            mode[ind_] = res['mode']
-            mean[ind_] = res['mean']
-            sigma[ind_] = res['sigma']
-            median[ind_] = res['median']
-            mc[ind_] = res['mc']
-            z_minchi2[ind_] = res['z_minchi2']
-            z_max_marg_like[ind_] = res['max_z_marg_likelihood']
-            sig68[ind_] = res['sig68']
-            KL_post_prior[ind_] = res['KL_post_prior']
-            min_chi2[ind_] = res['min_chi2']
-            template_type[ind_] = sed_float_list[res['maxL_template_ind']]
-            template_int[ind_] = res['maxL_template_ind']
             if output_pdfs:
-                pdfs_[ind_] = res['pdfs_']
+                pdfs_ = np.zeros((n_gals, len(z_bins))) + np.nan
 
-        #free up space
-        del res1
-        del res
+            #let's combine all the results from the parrallel (or not) jobs
+            for res in res1:
+                ind_ = res['ind']
+                mode[ind_] = res['mode']
+                mean[ind_] = res['mean']
+                sigma[ind_] = res['sigma']
+                median[ind_] = res['median']
+                mc[ind_] = res['mc']
+                z_minchi2[ind_] = res['z_minchi2']
+                z_max_marg_like[ind_] = res['max_z_marg_likelihood']
+                sig68[ind_] = res['sig68']
+                KL_post_prior[ind_] = res['KL_post_prior']
+                min_chi2[ind_] = res['min_chi2']
+                template_type[ind_] = sed_float_list[res['maxL_template_ind']]
+                template_int[ind_] = res['maxL_template_ind']
+                if output_pdfs:
+                    pdfs_[ind_] = res['pdfs_']
 
-        #saving point predictions as .fits files
-        cols = {'MEAN_Z': mean, 'Z_SIGMA': sigma, 'MEDIAN_Z': median,
-                'Z_MC': mc, 'Z_SIGMA68': sig68, 'KL_POST_PRIOR': KL_post_prior,
-                'TEMPLATE_TYPE': template_type, 'MINCHI2': min_chi2, 'MODE_Z': mode,
-                'Z_MINCHI2': z_minchi2, 'Z_MAXMARG_LIKE': z_max_marg_like}
+            #free up space
+            del res1
+            del res
 
-        new_cols = pyfits.ColDefs([pyfits.Column(name=col_name, array=cols[col_name], format='D') for col_name in cols.keys()])
+            #saving point predictions as .fits files
+            cols = {'MEAN_Z': mean, 'Z_SIGMA': sigma, 'MEDIAN_Z': median,
+                    'Z_MC': mc, 'Z_SIGMA68': sig68, 'KL_POST_PRIOR': KL_post_prior,
+                    'TEMPLATE_TYPE': template_type, 'MINCHI2': min_chi2, 'MODE_Z': mode,
+                    'Z_MINCHI2': z_minchi2, 'Z_MAXMARG_LIKE': z_max_marg_like}
 
-        id_cols = pyfits.ColDefs([pyfits.Column(name=config['ID'], array=ID, format='K')])
-        template_cols = pyfits.ColDefs([pyfits.Column(name='TEMPLATE_ID', array=template_int, format='K')])
+            new_cols = pyfits.ColDefs([pyfits.Column(name=col_name, array=cols[col_name], format='D') for col_name in cols.keys()])
 
-        if len(ADDITIONAL_OUTPUT_COLUMNS) > 0:
-            add_cols = pyfits.ColDefs([pyfits.Column(name=col_name, array=orig_table[col_name], format='D') for col_name in ADDITIONAL_OUTPUT_COLUMNS])
-            hdu = pyfits.BinTableHDU.from_columns(template_cols + id_cols + add_cols + new_cols)
-	    del add_cols
-        else:
-            hdu = pyfits.BinTableHDU.from_columns(template_cols + id_cols + new_cols)
-
-        fname = fil.replace('.fits', '.BPZ_{0}'.format(id) + output_file_suffix + '.fits')
-        fname = os.path.basename(fname)
-        hdu.writeto(fname, overwrite=True)
-
-        #free memory
-        del new_cols
-
-        #save pdf files
-        if output_pdfs:
+            id_cols = pyfits.ColDefs([pyfits.Column(name=config['ID'], array=ID, format='K')])
+            template_cols = pyfits.ColDefs([pyfits.Column(name='TEMPLATE_ID', array=template_int, format='K')])
 
             if len(ADDITIONAL_OUTPUT_COLUMNS) > 0:
-                for col_name in ADDITIONAL_OUTPUT_COLUMNS:
-                    cols[col_name] = np.array(orig_table[col_name])
+                add_cols = pyfits.ColDefs([pyfits.Column(name=col_name, array=orig_table[col_name], format='D') for col_name in ADDITIONAL_OUTPUT_COLUMNS])
+                hdu = pyfits.BinTableHDU.from_columns(template_cols + id_cols + add_cols + new_cols)
+                del add_cols
+            else:
+                hdu = pyfits.BinTableHDU.from_columns(template_cols + id_cols + new_cols)
 
-            #split into manageable write chunks to save RAM [otherwise blows up with >1M rows!]
-            inds = np.array_split(np.arange(n_gals), int(n_gals/200000) + 2)
-            for ind in inds:
-                cols_ = {config['ID']: ID[ind]}
-                for j in cols.keys():
-                    cols_[j] = cols[j][ind]
+            fname = fil.replace('.fits', '.BPZ_{0}'.format(id) + output_file_suffix + '.fits')
+            fname = os.path.basename(fname)
+            hdu.writeto(fname, overwrite=True)
 
-                df2 = pd.DataFrame(cols_)
-                df2.to_hdf(pdf_file, key='point_predictions', format='table', append=True, complevel=5, complib='blosc')
+            #free memory
+            del new_cols
 
-                #free memory
-                del cols_
-                del df2
-                if verbose:
-                    print 'entering pdf'
-                post_dict = {'KL_POST_PRIOR': KL_post_prior[ind], 'MEAN_Z': mean[ind], config['ID']: ID[ind],
-                'TEMPLATE_ID': template_int[ind]}
+            #save pdf files
+            if output_pdfs:
 
-                for ii in np.arange(len(z_bins)):
-                    post_dict['pdf_{:0.4}'.format(z_bins[ii])] = pdfs_[ind, ii]
-                if verbose:
-                    print 'generating DataFrame'
+                if len(ADDITIONAL_OUTPUT_COLUMNS) > 0:
+                    for col_name in ADDITIONAL_OUTPUT_COLUMNS:
+                        cols[col_name] = np.array(orig_table[col_name])
 
-                df2 = pd.DataFrame(post_dict)
+                #split into manageable write chunks to save RAM [otherwise blows up with >1M rows!]
+                inds = np.array_split(np.arange(n_gals), int(n_gals/200000) + 2)
+                for ind in inds:
+                    cols_ = {config['ID']: ID[ind]}
+                    for j in cols.keys():
+                        cols_[j] = cols[j][ind]
 
-                if verbose:
-                    print 'writing pdf'
+                    df2 = pd.DataFrame(cols_)
+                    df2.to_hdf(pdf_file, key='point_predictions', format='table', append=True, complevel=5, complib='blosc')
 
-                df2.to_hdf(pdf_file, key='pdf_predictions', format='table', append=True, complevel=5, complib='blosc')
+                    #free memory
+                    del cols_
+                    del df2
+                    if verbose:
+                        print( 'entering pdf')
+                    post_dict = {'KL_POST_PRIOR': KL_post_prior[ind], 'MEAN_Z': mean[ind], config['ID']: ID[ind],
+                    'TEMPLATE_ID': template_int[ind]}
 
-                #free memory
-                del df2
-                del post_dict
-                if verbose:
-                    print 'leaving pdf'
-            del inds
-        #free space
-        del cols
+                    for ii in np.arange(len(z_bins)):
+                        post_dict['pdf_{:0.4}'.format(z_bins[ii])] = pdfs_[ind, ii]
+                    if verbose:
+                        print( 'generating DataFrame')
+
+                    df2 = pd.DataFrame(post_dict)
+
+                    if verbose:
+                        print( 'writing pdf')
+
+                    df2.to_hdf(pdf_file, key='pdf_predictions', format='table', append=True, complevel=5, complib='blosc')
+
+                    #free memory
+                    del df2
+                    del post_dict
+                    if verbose:
+                        print( 'leaving pdf')
+                del inds
+            #free space
+            del cols
 
 if __name__ == '__main__':
     args = sys.argv[1:]

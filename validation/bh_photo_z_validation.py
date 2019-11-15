@@ -13,7 +13,7 @@ from weighted_kde import gaussian_kde as gss_kde
 import sys
 #from weighted_kde import gaussian_kde
 import collections
-from cPickle import dumps, load
+from pickle import dumps, load
 
 from astropy import units as u
 from astropy.cosmology import FlatLambdaCDM
@@ -23,7 +23,7 @@ from astropy.cosmology import FlatLambdaCDM
 Authors: Ben Hoyle, Christopher Bonnet
 
 To do:
- Enable mad() functions to accept axis= keyword for 
+ Enable mad() functions to accept axis= keyword for
  Nd arrays
 """
 
@@ -206,9 +206,9 @@ def keytst(_tst):
                 try:
                     bins = eval(binkyv[binkyv.keys()[0]])
                 except:
-                    print "unable to generate bins in this test"
-                    print ' ' + bn + ' ' + binkyv.keys()[0]
-                    print binkyv[binkyv.keys()[0]]
+                    print( "unable to generate bins in this test")
+                    print( ' ' + bn + ' ' + binkyv.keys()[0])
+                    print( binkyv[binkyv.keys()[0]])
                     sys.exit()
 
 def valid_tests(tsts):
@@ -228,7 +228,7 @@ def valid_hdf(filename, cols):
     #is args set?
     if cols is None:
         return False, 'you must have at least some defined cols'
-    
+
     #does the file exist
     if os.path.exists(filename) is False:
         return False, 'file does not exist'
@@ -322,7 +322,7 @@ def delta_sigma_crit(z1, z2, z2weight, z_lens):
         p_w_true[i] = np.sum(z2weight[ind])*1.0
 
     p_w_phot[p_w_phot < 0] = 0
-    
+
     int_ = np.trapz(p_w_phot, x=binCenters)
 
     p_w_phot = p_w_phot/int_
@@ -540,7 +540,7 @@ from statsmodels.distributions.empirical_distribution import ECDF
 def cumaltive_to_point(dfs, bincenter, points, N=10000):
 
     """ Determines the y-axis value (between 0-1) of a CDF determined from a pdf (df) evaluated at the x-axis values given by points
-    Expected shape: numpy dfs shape (galaxy, z-bins),  
+    Expected shape: numpy dfs shape (galaxy, z-bins),
     bincenter center of dfs bins!
 
     """
@@ -828,5 +828,3 @@ def _w_std(values, weights):
     average = np.average(values, weights=weights)
     variance = np.average((np.abs(values - average)) ** 2, weights=weights)  # Fast and numerically precise
     return np.sqrt(variance)
-
-

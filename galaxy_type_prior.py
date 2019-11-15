@@ -53,8 +53,8 @@ class GALAXYTYPE_PRIOR:
 
     """
 
-    def __init__(self, z=np.arange(0, 3.51, 0.01), 
-                 tipo_prior='sed_proir_file.cosmos_Laigle', 
+    def __init__(self, z=np.arange(0, 3.51, 0.01),
+                 tipo_prior='sed_proir_file.cosmos_Laigle',
                  mag_bins=np.arange(18, 24.01, 0.01),
                  template_type_list=None):
 
@@ -121,7 +121,7 @@ class GALAXYTYPE_PRIOR:
             if gal_type not in ['E/S0', 'Spiral', 'Irr']:
                 print ("galaxy type is not known. Must be 'E/S0', 'Spiral', 'Irr'")
                 sys.exit()
-        
+
         #CLIP THE MAGNITUDE?
         if imag < self.minmag:
             imag = self.minmag
@@ -129,16 +129,17 @@ class GALAXYTYPE_PRIOR:
         mag_keys = self.prior.keys()
 
         #which is the nearest i-mag that we have calucalted a prior
-        near_key = np.argmin(np.abs(np.array(mag_keys) - imag))
+        near_key = np.argmin(np.abs(np.array(list(mag_keys)) - imag))
 
         #store priors in a tempory array
-        priors = self.prior[mag_keys[near_key]]
+        priors = self.prior[list(mag_keys)[near_key]]
 
         #interpolate between types, based on frac_types
-        norm = np.sum(frac_types.values())
+        norm = np.sum(list(frac_types.values()))
+
 
         #the final prior is a linear combination of the different frac_prior_from_types
-        final_prior = np.zeros_like(priors[frac_types.keys()[0]])
+        final_prior = np.zeros_like(priors[list(frac_types.keys())[0]])
         for gal_typ in frac_types:
             frac_types[gal_typ] /= norm
             final_prior += priors[gal_typ] * frac_types[gal_typ]
@@ -153,7 +154,7 @@ class GALAXYTYPE_PRIOR:
         for Ellipticals, Spirals, and Irregular/Starbursts
         Returns an array pi[z[:],:nt]
         The input magnitude is F814W AB ~= i mag
-        """ 
+        """
 
         #don't allow mags less than the limit
         if mag < self.minmag:
@@ -196,7 +197,7 @@ class GALAXYTYPE_PRIOR:
         f_t['Irr'] = max([f_t['Irr'],0.02])
         f_t['E/S0'] = (1. - f_t['Irr'])*(f_t['E/S0']/(f_t['E/S0']+f_t['Spiral']))
         f_t['Spiral'] = (1. - f_t['Irr'])*(f_t['Spiral']/(f_t['E/S0']+f_t['Spiral']))
-        
+
         #calculate probs P(T|mag) - p_T_m0 is not used
         p_T_m0 = {}
         for gal_typ in ['E/S0', 'Spiral']:
@@ -212,7 +213,7 @@ class GALAXYTYPE_PRIOR:
             z_mt = np.clip(z_mt, 0.01, 15)
             expon = np.clip(np.power(z / z_mt, a[gal_typ]), 0., 700.)
             p_z_tmo[gal_typ] = np.power(z, a[gal_typ]) * np.exp(-1.0 * expon)
-            
+
         #print 'p_T_m0[E/S0]', p_z_tmo['E/S0']
         #mutliply p_T_m0 by the prior on galaxy type f_t
         #and normalise
@@ -223,9 +224,9 @@ class GALAXYTYPE_PRIOR:
 
             #comparision with BPZ exact! until here.
             if gal_typ == 'Spiral' and np.abs(m-22.343) < 0.05 and False:
-                print 'm',m
-                print 'f_t', f_t
-                print p_z_tmo[gal_typ][0:50]
+                print( 'm',m)
+                print( 'f_t', f_t)
+                print( p_z_tmo[gal_typ][0:50])
             p_z_tmo[gal_typ] /= np.sum(p_z_tmo[gal_typ]+1.e-3)
             p_z_tmo[gal_typ] *= f_t[gal_typ]
         return p_z_tmo
@@ -240,7 +241,6 @@ if __name__ == '__main__':
                     )
 
     #g = GALPROIR.evaluate(mag, frac_prior_from_types={'E/S0':1, 'Irr':0, 'Spiral':0})
-    print 'mag', mag
+    print( 'mag', mag)
     g = GALPROIR.calculate_priors(mag)
-    print g['Irr'][0:50]
-
+    print( g['Irr'][0:50])
