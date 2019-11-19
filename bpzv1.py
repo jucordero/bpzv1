@@ -357,8 +357,7 @@ def main(args):
 
     verbose = key_not_none(config, 'verbose')
 
-    files = args[1:-1]
-    id = int(args[-1])
+    files = args[1:]
     if isinstance(files, list) is False:
         files = [files]
 
@@ -738,7 +737,7 @@ def main(args):
             else:
                 hdu = pyfits.BinTableHDU.from_columns(template_cols + id_cols + new_cols)
 
-            fname = fil.replace('.fits', '.BPZ_{0}'.format(id) + output_file_suffix + '.fits')
+            fname = fil.replace('.fits', '.BPZ' + output_file_suffix + '.fits')
             fname = os.path.basename(fname)
             hdu.writeto(fname, overwrite=True)
 
